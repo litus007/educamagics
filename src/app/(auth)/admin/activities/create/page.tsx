@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { useRouter } from "next/navigation";
-
+export const dynamic = 'force-dynamic'
 export default function CreateActivityPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");

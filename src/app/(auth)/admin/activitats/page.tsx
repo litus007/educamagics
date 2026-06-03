@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-
+export const dynamic = 'force-dynamic'
 export default async function ActivitatsPage() {
   // Obtenim les sessions incloent la reserva i el professor
   const activitats = await db.classSession.findMany({

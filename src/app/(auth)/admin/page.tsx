@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth/auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
-
+export const dynamic = 'force-dynamic'
 export default async function AdminDashboardPage() {
   const session = await getServerSession(authOptions);
 

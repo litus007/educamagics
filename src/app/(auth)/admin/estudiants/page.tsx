@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import DeleteUserButton from "@/components/admin/DeleteUserButton"; // Suposo que tens un component així
-
+export const dynamic = 'force-dynamic'
 export default async function EstudiantsPage() {
   const students = await db.childProfile.findMany({
     include: { user: true }

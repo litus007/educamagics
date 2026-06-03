@@ -1,6 +1,6 @@
 "use client";
 import { trpc } from "@/lib/trpc/client";
-
+export const dynamic = 'force-dynamic'
 export default function ActivityManagementPage() {
   const { data: activities } = trpc.activity.listAll.useQuery();
 

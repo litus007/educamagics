@@ -1,7 +1,7 @@
 "use client";
 import { trpc } from "@/lib/trpc/client";
 import { BookingStatus } from "@prisma/client";
-
+export const dynamic = 'force-dynamic'
 export default function AdminBookingApproval() {
   const { data: bookings, refetch } = trpc.booking.listPendingAdmin.useQuery();
   const approveMutation = trpc.booking.updateStatus.useMutation({ onSuccess: () => refetch() });

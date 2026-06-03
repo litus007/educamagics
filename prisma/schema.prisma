@@ -72,6 +72,8 @@ model User {
   role          Role      @default(PARENT)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  tempCode      String?
+  codeExpires   DateTime?
 
   // NextAuth relations
   accounts Account[]
@@ -219,6 +221,7 @@ enum BookingStatus {
   PENDING_TEACHER
   CONFIRMED
   REJECTED
+  COMPLETED
 }
 
 model Booking {

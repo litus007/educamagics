@@ -30,10 +30,19 @@ export function TeacherSearch() {
   const [dayOfWeek, setDayOfWeek] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = trpc.teacher.search.useQuery(
-    { subject: subject || undefined, dayOfWeek: dayOfWeek || undefined, page },
-    { keepPreviousData: true }
-  );
+  
+const { data, isLoading } = trpc.teacher.search.useQuery(
+  { 
+    subject: subject || undefined, 
+    dayOfWeek: dayOfWeek || undefined, 
+    page 
+  },
+  { 
+    // placeholderData: (previousData) => previousData, 
+    // Si això continua fallant, deixa-ho comentat momentàniament per comprovar si el build passa
+    placeholderData: (previousData: any) => previousData 
+  }
+);
 
   return (
     <div className="space-y-5">

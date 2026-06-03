@@ -10,7 +10,7 @@ import {
 } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { useCallback, useState } from "react";
-import { trpc } from "@/lib/trpc/trpc-client"; // Assegura't de fer servir el teu nou client
+import { trpc } from "@/lib/trpc/client"; // Assegura't de fer servir el teu nou client
 import { TeacherMultitaskView } from "./TeacherMultitaskView";
 import { Whiteboard } from "./Whiteboard";
 

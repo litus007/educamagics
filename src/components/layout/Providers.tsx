@@ -7,7 +7,7 @@ import { createTRPCReact } from "@trpc/react-query"; // <--- MANTÉ AIXÒ
 import { SessionProvider } from "next-auth/react";
 import { useState } from "react";
 import superjson from "superjson";
-import type { AppRouter } from "@/lib/trpc/router";
+import { type AppRouter } from "../../lib/trpc/router";
 
 // EXPORTA EL TRPC AQUÍ, PERÒ COMPTA:
 export const trpc = createTRPCReact<AppRouter>();
@@ -40,8 +40,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }),
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
-          transformer: superjson, // A la v11 estable, el transformer s'injecta obligatòriament a cada enllaç batch si no es fa servir el client "unstable"
-        }),
+          transformer: superjson as any,
+                  }),
       ],
     })
   );

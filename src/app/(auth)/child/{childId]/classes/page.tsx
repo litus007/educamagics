@@ -1,17 +1,19 @@
-// src/app/child/[childId]/classes/page.tsx
 "use client";
-import { trpc } from "@/components/layout/Providers"; // Ajusta el path segons el teu projecte
+import { trpc } from "@/components/layout/Providers";
 import { BookingList } from "@/components/common/BookingList";
 
 export default function ChildClassesPage({ params }: { params: { childId: string } }) {
-  const { data: rawBookings } = trpc.booking.listByChild.useQuery({ childId: params.childId });
+  // Canviem per (trpc.booking as any)
+  const { data: rawBookings } = (trpc.booking as any).listByChild.useQuery({ 
+    childId: params.childId 
+  });
 
-  const bookings = rawBookings?.map(b => ({
+  const bookings = rawBookings?.map((b: any) => ({
     id: b.id,
     date: b.date,
     status: b.status as any,
-    teacherName: b.timeSlot.teacher.user.name ?? "Desconegut",
-    childName: "Tu", // Com que estem al seu dashboard, sabem qui és
+    teacherName: b.timeSlot?.teacher?.user?.name ?? "Desconegut",
+    childName: "Tu",
     notes: b.notes
   })) || [];
 

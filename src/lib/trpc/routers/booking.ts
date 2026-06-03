@@ -83,3 +83,17 @@ export const bookingRouter = router({
       });
     }),
 });
+listByChild: parentProcedure
+    .input(z.object({ childId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.db.booking.findMany({
+        where: { 
+          childId: input.childId 
+        },
+        include: { 
+          timeSlot: { include: { teacher: { include: { user: true } } } },
+          session: true 
+        },
+        orderBy: { date: "asc" },
+      });
+    })

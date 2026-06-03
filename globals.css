@@ -1,0 +1,6 @@
+/* src/app/globals.css */
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* Importa els estils de LiveKit i tldraw des dels components */

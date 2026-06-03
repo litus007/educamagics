@@ -1,0 +1,407 @@
+// Educamagics — schema.prisma
+// Base de dades: PostgreSQL a Supabase (free tier)
+// ORM: Prisma 5.x
+// Executa: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICACIÓ
+// ─────────────────────────────────────────────
+
+// Taula requerida per NextAuth.js
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// USUARIS
+// ─────────────────────────────────────────────
+
+enum Role {
+  PARENT
+  CHILD
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          Role      @default(PARENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // NextAuth relations
+  accounts Account[]
+  sessions Session[] // Sessions d'autenticació de NextAuth
+
+  // Perfils de rol
+  parentProfile  ParentProfile?
+  childProfile   ChildProfile?
+  teacherProfile TeacherProfile?
+
+  // Jocs
+  attempts      Attempt[]
+  globalRanking GlobalRanking?
+
+  // Relació amb les sessions de classe
+  classSessions ClassSession[]
+}
+
+// ─────────────────────────────────────────────
+// PERFIL DE PARE / MARE
+// ─────────────────────────────────────────────
+
+model ParentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  phone     String?
+  createdAt DateTime @default(now())
+
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  children Child[]
+}
+
+// ─────────────────────────────────────────────
+// PERFIL DE NEN / NENA
+// ─────────────────────────────────────────────
+
+model ChildProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  // PIN de 4 dígits generat pel pare (hash bcrypt)
+  pinHash   String
+  avatarKey String? // clau d'avatar gamificat (ex: "wizard", "rocket")
+  points    Int      @default(0) // gamificació
+  createdAt DateTime @default(now())
+
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  children Child[]
+}
+
+// Entitat de relació Pare <-> Nen
+// Un pare pot tenir diversos nens; un nen pot tenir diversos tutors
+model Child {
+  id             String   @id @default(cuid())
+  displayName    String // nom visible a la UI del nen
+  gradeLevel     String? // ex: "4t de primària"
+  parentId       String
+  childProfileId String
+  createdAt      DateTime @default(now())
+
+  parent       ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  childProfile ChildProfile  @relation(fields: [childProfileId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+
+  @@unique([parentId, childProfileId])
+}
+
+// ─────────────────────────────────────────────
+// PERFIL DE PROFESSOR
+// ─────────────────────────────────────────────
+
+enum SubjectArea {
+  MATH
+  LANGUAGE
+  ENGLISH
+  SCIENCE
+  HISTORY
+  MUSIC
+  ART
+  OTHER
+}
+
+model TeacherProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  bio         String?  @db.Text
+  rating      Float? // mitjana calculada (0-5)
+  ratingCount Int      @default(0)
+  isActive    Boolean  @default(true) // visible al cercador
+  hourlyRate  Float? // preu per hora (fase 2: pagaments)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjects     TeacherSubject[]
+  availability TimeSlot[]
+  sessions     ClassSession[]
+}
+
+model TeacherSubject {
+  id        String      @id @default(cuid())
+  teacherId String
+  subject   SubjectArea
+  level     String? // ex: "primària", "ESO"
+
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subject, level])
+}
+
+// ─────────────────────────────────────────────
+// DISPONIBILITAT HORÀRIA
+// ─────────────────────────────────────────────
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+model TimeSlot {
+  id        String    @id @default(cuid())
+  teacherId String
+  dayOfWeek DayOfWeek
+  startTime String // format "HH:MM" (UTC)
+  endTime   String // format "HH:MM" (UTC)
+  capacity  Int       @default(1)
+  isBooked  Boolean   @default(false)
+
+  teacher  TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([teacherId, dayOfWeek])
+}
+
+// ─────────────────────────────────────────────
+// RESERVES
+// ─────────────────────────────────────────────
+
+enum BookingStatus {
+  PENDING_ADMIN
+  PENDING_TEACHER
+  CONFIRMED
+  REJECTED
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  childId    String
+  timeSlotId String
+  date       DateTime // data concreta de la classe
+  status     BookingStatus @default(PENDING_ADMIN)
+  notes      String?       @db.Text // notes del pare al professor
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  child         Child          @relation(fields: [childId], references: [id], onDelete: Cascade)
+  timeSlot      TimeSlot       @relation(fields: [timeSlotId], references: [id])
+  session       ClassSession?
+  notifications Notification[]
+
+  @@index([childId, status])
+  @@index([timeSlotId, date])
+}
+
+// ─────────────────────────────────────────────
+// SESSIONS DE CLASSE (aula virtual)
+// ─────────────────────────────────────────────
+
+enum SessionStatus {
+  SCHEDULED
+  LIVE // el professor és a la sala
+  ENDED
+}
+
+model ClassSession {
+  id           String        @id @default(cuid())
+  bookingId    String        @unique
+  teacherId    String
+  livekitRoom  String        @unique @default(cuid())
+  status       SessionStatus @default(SCHEDULED)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  durationMins Int?
+  createdAt    DateTime      @default(now())
+  userId       String? // Per vincular amb l'usuari si cal
+
+  booking Booking        @relation(fields: [bookingId], references: [id])
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id])
+  user    User?          @relation(fields: [userId], references: [id])
+
+  @@index([teacherId, status])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICACIONS (substitueix BullMQ per MVP)
+// Processades síncronament a l'API route o
+// via Supabase pg_cron (free tier: 1 job)
+// ─────────────────────────────────────────────
+
+enum NotificationType {
+  BOOKING_REQUEST // → al professor
+  BOOKING_CONFIRMED // → al pare
+  BOOKING_CANCELLED
+  CLASS_REMINDER // 30 min abans
+  CLASS_STARTED // el professor és a la sala → activa botó del nen
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  bookingId String?
+  toUserId  String
+  type      NotificationType
+  channel   NotificationChannel @default(EMAIL)
+  status    NotificationStatus  @default(PENDING)
+  payload   Json // dades específiques del tipus
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt]) // per processar pendents
+  @@index([toUserId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MÒDUL DE JOCS DE LÒGICA — addicions al schema.prisma existent
+// Afegeix aquests models al final del teu fitxer prisma/schema.prisma
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Tipus de repte de lògica
+enum ActivityType {
+  NUMBER_SERIES // Sèries numèriques: 2, 4, 8, ?, 32
+  VISUAL_PATTERN // Patrons visuals: quin ve a continuació?
+  WORD_PUZZLE // Trencaclosques de paraules
+  MATH_SPEED // Càlcul mental contra el rellotge
+  ODD_ONE_OUT // Quin no encaixa?
+}
+
+enum DifficultyLevel {
+  EASY // 6-8 anys
+  MEDIUM // 9-11 anys
+  HARD // 12-14 anys
+}
+
+// ── Activitat / Repte ─────────────────────────────────────────────────────────
+model Activity {
+  id         String          @id @default(cuid())
+  type       ActivityType
+  difficulty DifficultyLevel
+  title      String
+  // Dades del repte en JSON: pregunta, opcions, resposta correcta, pistes
+  // Exemple NUMBER_SERIES: { sequence: [2,4,8,null,32], answer: 16, hint: "multiplica per 2" }
+  // Exemple ODD_ONE_OUT:   { items: ["gat","gos","taula","ocell"], answer: 2, hint: "no és un animal" }
+  payload    Json
+  pointsBase Int             @default(100) // punts base sense bonificació de temps
+  timeLimit  Int             @default(30) // segons per respondre
+  isDaily    Boolean         @default(false) // repte del dia
+  activeDate DateTime? // si isDaily=true, data en què és actiu
+  createdAt  DateTime        @default(now())
+
+  attempts Attempt[]
+
+  @@index([isDaily, activeDate])
+  @@index([difficulty, type])
+}
+
+// ── Intent de resolució ───────────────────────────────────────────────────────
+model Attempt {
+  id              String   @id @default(cuid())
+  activityId      String
+  userId          String
+  answer          String // resposta donada (índex o valor)
+  isCorrect       Boolean
+  timeSpentMs     Int // mil·lisegons fins a la resposta
+  pointsEarned    Int      @default(0)
+  // Desglose de la puntuació per transparència
+  pointsBreakdown Json? // { base: 100, timeBonus: 45, difficultyBonus: 50, total: 195 }
+  createdAt       DateTime @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Un usuari només pot tenir un intent per activitat (evita grinding)
+  @@unique([activityId, userId])
+  @@index([userId, createdAt])
+  @@index([activityId, isCorrect])
+}
+
+// ── Rànquing global ───────────────────────────────────────────────────────────
+// Taula desnormalitzada per a consultes de rànquing ràpides (O(1) per userId)
+// S'actualitza en cada Attempt correcte via lògica de negoci
+model GlobalRanking {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  displayName   String // nom visible al rànquing
+  avatarKey     String    @default("star") // clau d'avatar gamificat
+  totalPoints   Int       @default(0)
+  totalCorrect  Int       @default(0)
+  totalAttempts Int       @default(0)
+  currentStreak Int       @default(0) // dies consecutius jugant
+  longestStreak Int       @default(0)
+  rank          Int? // posició calculada (NULL fins al primer recàlcul)
+  weeklyPoints  Int       @default(0) // reset cada dilluns (via cron/webhook)
+  lastPlayedAt  DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([totalPoints(sort: Desc)]) // índex per consultes de TOP N
+  @@index([weeklyPoints(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AFEGIR AL MODEL User existent:
+//
+// attempts      Attempt[]
+// globalRanking GlobalRanking?
+// ─────────────────────────────────────────────────────────────────────────────
